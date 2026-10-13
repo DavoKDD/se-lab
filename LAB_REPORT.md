@@ -1,70 +1,94 @@
 # Lab 3 — CI and Static Techniques
 
 Repository: https://github.com/DavoKDD/se-lab  
-Date: 13 October 2026  
-Local branch: `bugfix`
+Pull request: https://github.com/DavoKDD/se-lab/pull/1  
+Date: 13 October 2026
 
-## Scope and current status
+## Setup
 
-The personal public repository was generated from `ftsrg-softeng/lab3` and cloned locally. Subsequent changes are local only. No changes have been pushed, no pull request has been created, and SonarQube Cloud has not been connected. This report records completed local work; the online evidence below still needs to be collected.
+The repository was created from the `ftsrg-softeng/lab3` template and cloned to this computer. The project is open in VS Code. It uses Java 21 and the Maven wrapper. The first commit is `d6c6b8a7d6ba77c8ededb54bbd2503ff05dec0b0`.
 
-## Environment and initial commit
+The Git Graph screenshots and the SonarQube for IDE part still need to be added.
 
-The environment uses OpenJDK 21.0.12.1 and the project's Maven wrapper (Maven 3.10.0). The project is open in Visual Studio Code. The initial personal repository commit is `d6c6b8a7d6ba77c8ededb54bbd2503ff05dec0b0`.
+## GitHub Actions
 
-Required evidence still pending: Git Graph screenshot showing the initial commit and its metadata.
+The Java with Maven template used Java 17. The workflow was changed to Java 21 because the project needs it. It runs on `ubuntu-latest` when there is a push to `main` or a pull request to `main`. It can also be started manually.
 
-## Continuous integration
+The command is `mvn -B verify --file pom.xml`. Maven builds the project and runs the tests. The next step updates the dependency graph.
 
-The GitHub Java with Maven template examined in the browser used Temurin Java 17 on `ubuntu-latest`, triggered by pushes to `main` and pull requests targeting `main`.
+The first run failed in the dependency graph step with error 403: `Resource not accessible by integration`. After enabling Read and write permissions for Actions and enabling Dependency Graph, the second attempt passed. The dependency snapshot was created successfully. The [successful run](https://github.com/DavoKDD/se-lab/actions/runs/38324869409) took 36 seconds. Its Maven log shows **2 tests, 0 failures and 0 errors**.
 
-The locally prepared `.github/workflows/maven.yml` uses Temurin Java 21, compiles with `mvn -B compile --file pom.xml`, and tests/packages with `mvn -B verify --file pom.xml`. It runs on pushes to `main` or `bugfix`, pull requests targeting `main`, and manual dispatch. Its token has read-only repository contents access. The optional dependency submission step is not included in this local version, so it does not require write access. The assignment's dependency-graph exercise remains pending.
+There were also warnings about old action versions. They did not stop the build.
 
-Baseline local result: **2 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS**. Both tests are in `GT4500Test`.
+## Git branches
 
-After fixes and regression tests: **5 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS**. `GT4500Test` contributes 2 tests and `TorpedoStoreTest` contributes 3.
+The old TODO line in README was removed in local commit `686d43e`. Meanwhile, the workflow was added on GitHub in commit `7f29c43`. The push from the local branch was rejected because the remote branch had a new commit.
 
-These are local Maven results, not GitHub Actions results. Required evidence still pending: full browser screenshot containing the workflow URL and successful test output.
+After fetching the remote changes, `origin/main` was merged into local `main`. The merge commit is `09402a4`. The common ancestor was the first commit, `d6c6b8a`. The result was pushed to GitHub.
 
-## Local and remote branches
+Main was then merged into `bugfix` in commit `0277379`. There was a conflict in the workflow file. The version from main was kept, including Java 21 and the dependency graph step.
 
-The outdated TODO line was removed from README in local commit `686d43e`. The local `main` contains this commit; `origin/main` still points to the initial commit. The rejected push, remote workflow commit, fetch and merge exercise has not been performed because uploads were paused. No rejected push or merge result is claimed.
+## Problems in TorpedoStore
 
-Required evidence still pending: Git Graph after the remote/local merge exercise.
+The source code was checked first. Later, SonarQube Cloud found the same three problems on main.
 
-## Findings in TorpedoStore.java
-
-The following findings were identified by inspecting the source. SonarQube for IDE has not yet been run, so these are not claimed as captured tool results.
-
-| Finding | Assessment | Fix |
+| Problem | Why it is a problem | Change |
 | --- | --- | --- |
-| An `IllegalArgumentException` is constructed but never thrown. | Genuine defect. Invalid firing requests continue through the method and can alter the stock. | Throw the exception. Commit `5bc0f00`. |
-| `torpedoCount =- numberOfTorpedos` assigns a negative value instead of subtracting from the current stock. | Genuine defect. A valid shot incorrectly empties the launcher. | Use `-=`. Commit `36ecb1e`. |
-| A new `Random` instance is created for every firing attempt. | A real efficiency/maintainability issue; it is less severe than the stock and validation defects. A persistent generator is sufficient. | Keep one final instance per store. Commit `d6d2285`. |
+| The exception was created but not thrown. | The method continued even when the number of torpedoes was invalid. | Added `throw` in commit `5bc0f00`. |
+| The code used `=-` instead of `-=`. | It set the stock to a negative number instead of subtracting the fired torpedoes. | Changed it to `-=` in commit `36ecb1e`. |
+| A new `Random` object was created for each shot. | The same generator can be used again. Creating a new one each time is unnecessary. | Added one final generator field in commit `d6d2285`. |
 
-An interesting Java rule to inspect is S2095, which concerns closing resources such as streams. Resource leaks can accumulate even when individual operations appear to work. This rule has been selected for discussion, not verified in the installed IDE rule list yet.
+All three findings are valid. Sonar marked the Random issue as High and the other two as Medium for reliability.
 
-## Code review
+An interesting Java rule is S2095, about closing resources. For example, an open stream should be closed after use. Otherwise, the program can keep resources that it no longer needs. This rule still needs to be checked in the IDE rule list.
 
-The three fixes are separate local commits on `bugfix`. The additional tests check repeated firing, stock depletion, invalid arguments, and firing from an empty store. They assume the default failure rate (`IVT_RATE` unset or zero).
+## Tests
 
-No partner is available yet. A partner review, requested changes, follow-up commits, approval and the attendance proof comment remain pending. The pull request must remain unmerged until the assignment's review and analysis requirements are satisfied.
+The original project had 2 tests. Three more tests were added for `TorpedoStore`. They check repeated shots, an empty store and invalid numbers of torpedoes. They also check that an invalid request does not change the stock.
 
-Required evidence still pending: PR information and successful CI, review conversation and requested changes, final checks and merged status when permitted.
+After the fixes, the local result was **5 tests, 0 failures and 0 errors**. These tests use the default failure rate, so `IVT_RATE` must be unset or zero.
+
+To run them:
+
+```sh
+sh ./mvnw verify
+```
+
+## Pull request and review
+
+PR #1 contains the three fixes in separate commits and the new tests. DavoKDD is the assignee. A review was requested from am11001.
+
+The GitHub Actions check and the SonarQube Cloud check passed. The PR is still open. The partner review, a change after review, final approval and the attendance proof still need to be completed. The partner's PR also needs a review.
 
 ## SonarQube Cloud
 
-No cloud analysis has been run. Initial analysis screenshots, the list of actual main-branch findings, their assigned statuses, and confirmation that the PR fixes resolve the findings must be added after connecting the project.
+The project was imported into organization `davokdd` with the Free plan. The GitHub app has access only to `se-lab`. Automatic import of future repositories is off.
 
-The use of `Random` should be assessed in context: this is a simulation of firing failure, not a security-sensitive random value. If the actual hotspot description matches this usage, it can be reviewed as Safe with that justification. No hotspot has been marked Safe yet. Remaining maintainability findings must be evaluated individually; none have been invented or assigned statuses in this report.
+The first main analysis checked commit `09402a4`. It found 3 reliability issues and 3 maintainability issues. Reliability had rating D and maintainability had rating A. The first quality gate was Not computed; the page says that the next analysis will update it.
+
+The maintainability findings were:
+
+- `GT4500.fireTorpedo`: cognitive complexity is 25, above the limit of 15. This is a useful warning because the method has many branches and is harder to follow.
+- `GT4500.java`: a TODO comment is still present. It points to unfinished work, so the finding is valid.
+- `GT4500Test.java`: the test methods have unnecessary visibility modifiers. JUnit 5 does not need them, so they can be removed.
+
+A request to set these three findings to Confirmed was submitted. The saved page still needs to be checked before recording their final status.
+
+The PR analysis passed the quality gate with **0 new issues**. Sonar also reported **0 security hotspots**. There was no Random hotspot to mark Safe in this analysis. Random is used here to simulate a firing failure, not to protect secret data.
+
+Sonar showed 0.0% coverage on new code. This does not mean that the Maven tests failed: coverage results have not been imported into the automatic cloud analysis. The three original problems should be checked again on main after the PR is merged.
 
 ## Badges and license
 
-The project uses the MIT license (`LICENSE`). The following Markdown has been added locally:
+The project has an MIT license. README contains these two badges:
 
 ```markdown
 [![Java CI with Maven](https://github.com/DavoKDD/se-lab/actions/workflows/maven.yml/badge.svg)](https://github.com/DavoKDD/se-lab/actions/workflows/maven.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ```
 
-The workflow badge will become meaningful after the workflow is published and runs. Required evidence still pending: screenshot of both rendered badges.
+The badge screenshot still needs to be added.
+
+## What is left
+
+The report is not final yet. The remaining parts are the IDE analysis, missing screenshots, partner review, attendance proof and the final merge after approval. The final results should be added when these steps are finished.
